@@ -1,0 +1,10 @@
+version: '3'
+
+services:
+  mongodb-sync:
+    image: shiguanghuxian/mongodb-sync:latest
+    restart: always
+    volumes:
+      - ./bin/logs:/data/logs
+      - ./bin/oplog:/data/oplog
+      - ./bin/config/cfg.toml:/data/config/cfg.toml

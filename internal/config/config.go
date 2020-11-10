@@ -29,7 +29,7 @@ func (c *MongoConfig) String() string {
 
 const (
 	SyncTypeMongo = "mongo"
-	SyncTypeEs    = "es"
+	SyncTypeEs    = "elasticsearch"
 	SyncTypeMysql = "mysql"
 	SyncTypeFile  = "file"
 )
@@ -40,7 +40,6 @@ type SyncConfig struct {
 	DestinationUri  string              `toml:"destination_uri" json:"destination_uri,omitempty"`   // 目标db链接地址
 	SourceDb        string              `toml:"source_db" json:"source_db,omitempty"`               // 源db
 	DestinationDb   string              `toml:"destination_db" json:"destination_db,omitempty"`     // 目标db
-	Fields          []string            `toml:"fields"`                                             // 同步的字段
 	Collections     map[string]string   `toml:"collections" json:"collections,omitempty"`           // 同步的集合对照 key:来源集合 val:目标集合或表等
 	CollectionField map[string][]string `toml:"collection_field" json:"collection_field,omitempty"` // 需要同步的字段列表 - 下标为来源db的collection名值为同步的字段列表
 }

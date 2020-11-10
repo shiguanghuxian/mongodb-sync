@@ -2,7 +2,6 @@ package program
 
 import (
 	"context"
-	"encoding/json"
 	"log"
 	"time"
 
@@ -113,13 +112,13 @@ func (p *Program) producer(cursor *mongo.ChangeStream, syncCfg *config.SyncConfi
 		if err != nil {
 			logger.GlobalLogger.Errorw("序列号最后变更id错误", "err", err, "syncCfg", syncCfg, "_id", cursor.ID(), "lastEventIdByte", string(lastEventIdByte))
 		}
-		log.Println("记录最后事件id", string(lastEventIdByte))
+		// log.Println("记录最后事件id", string(lastEventIdByte))
 		if len(lastEventIdByte) > 0 {
 			p.lastEventIds[syncCfg.GetKey()] = lastEventIdByte
 		}
 
-		js, _ := json.Marshal(changeEvent)
-		log.Println("监听db变化", syncCfg.SourceDb, "data", string(js))
+		// js, _ := json.Marshal(changeEvent)
+		// log.Println("监听db变化", syncCfg.SourceDb, "data", string(js))
 		documentChan <- changeEvent
 	}
 }

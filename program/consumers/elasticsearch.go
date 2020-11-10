@@ -66,6 +66,18 @@ func (ec *ElasticsearchConsumer) Disconnect() error {
 func (ec *ElasticsearchConsumer) HandleData(data *models.ChangeEvent) error {
 	log.Println("elasticsearch处理收到数据", data.Namespace.Db, data.Namespace.Coll, data.Operation)
 	var err error
+	// 保证每次数据写入成功
+	defer func() {
+		if err == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), TimeoutCtx)
+			defer cancel()
+			_, err = ec.client.Flush().Index(ec.Index).Do(ctx)
+			if err != nil {
+				logger.GlobalLogger.Errorw("Flush数据错误", "err", err, "data", data, "cfg", ec.cfg)
+			}
+		}
+	}()
+
 	// 根据操作不同处理
 	switch data.Operation {
 	case "insert":
@@ -77,7 +89,8 @@ func (ec *ElasticsearchConsumer) HandleData(data *models.ChangeEvent) error {
 	case "replace":
 		err = ec.replace(data)
 	default:
-		return errors.New("未知事件类型")
+		err = errors.New("未知事件类型")
+		return err
 	}
 	if err != nil {
 		logger.GlobalLogger.Errorw("处理数据错误", "err", err, "data", data, "cfg", ec.cfg)
@@ -102,10 +115,10 @@ func (ec *ElasticsearchConsumer) FilterField(collection string, document bson.M)
 
 // 插入es一条数据 - 未来可优化为批量插入 - 需要考虑时间和数据一致性
 func (ec *ElasticsearchConsumer) insert(data *models.ChangeEvent) error {
-	bulkRequest := ec.client.Bulk()
-	bulkRequest.Add(elastic.NewBulkUpdateRequest().Index(ec.Index).Type(ec.Type).Id(data.DocumentKey.ID.Hex()).Doc(data.Document).DocAsUpsert(true))
 	ctx, cancel := context.WithTimeout(context.Background(), TimeoutCtx)
 	defer cancel()
+	bulkRequest := ec.client.Bulk()
+	bulkRequest.Add(elastic.NewBulkUpdateRequest().Index(ec.Index).Type(ec.Type).Id(data.DocumentKey.ID.Hex()).Doc(data.Document).DocAsUpsert(true))
 	bulkResponse, err := bulkRequest.Do(ctx)
 	if err != nil {
 		logger.GlobalLogger.Errorw("数据插入elasticsearch错误", "err", err, "data", data, "cfg", ec.cfg)
@@ -117,10 +130,11 @@ func (ec *ElasticsearchConsumer) insert(data *models.ChangeEvent) error {
 
 // 更新数据
 func (ec *ElasticsearchConsumer) update(data *models.ChangeEvent) error {
-	bulkRequest := ec.client.Bulk()
-	bulkRequest.Add(elastic.NewBulkUpdateRequest().Index(ec.Index).Type(ec.Type).Id(data.DocumentKey.ID.Hex()).Upsert(data.Document))
 	ctx, cancel := context.WithTimeout(context.Background(), TimeoutCtx)
 	defer cancel()
+	// 更新数据
+	bulkRequest := ec.client.Bulk()
+	bulkRequest.Add(elastic.NewBulkUpdateRequest().Index(ec.Index).Type(ec.Type).Id(data.DocumentKey.ID.Hex()).Doc(data.Document).DocAsUpsert(true))
 	bulkResponse, err := bulkRequest.Do(ctx)
 	if err != nil {
 		logger.GlobalLogger.Errorw("更新elasticsearch数据错误", "err", err, "data", data, "cfg", ec.cfg)
@@ -132,10 +146,10 @@ func (ec *ElasticsearchConsumer) update(data *models.ChangeEvent) error {
 
 // 删除一条数据
 func (ec *ElasticsearchConsumer) delete(data *models.ChangeEvent) error {
-	bulkRequest := ec.client.Bulk()
-	bulkRequest.Add(elastic.NewBulkDeleteRequest().Index(ec.Index).Type(ec.Type).Id(data.DocumentKey.ID.Hex()))
 	ctx, cancel := context.WithTimeout(context.Background(), TimeoutCtx)
 	defer cancel()
+	bulkRequest := ec.client.Bulk()
+	bulkRequest.Add(elastic.NewBulkDeleteRequest().Index(ec.Index).Type(ec.Type).Id(data.DocumentKey.ID.Hex()))
 	bulkResponse, err := bulkRequest.Do(ctx)
 	if err != nil {
 		logger.GlobalLogger.Errorw("删除elasticsearch数据错误", "err", err, "data", data, "cfg", ec.cfg)

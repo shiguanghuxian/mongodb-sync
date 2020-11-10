@@ -1,7 +1,7 @@
 BINARY=mongodb-sync
 
 default:
-	@echo 'Usage of make: [ build | linux | windows | run | clean ]'
+	@echo 'Usage of make: [ build | linux | windows | run | docker | docker_push | clean ]'
 
 build: 
 	go build -o ./bin/${BINARY} ./
@@ -12,10 +12,17 @@ linux:
 windows: 
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o ./bin/${BINARY}.exe ./
 
+docker: linux
+	docker build -t shiguanghuxian/mongodb-sync .
+
+docker_push: docker
+	docker push shiguanghuxian/mongodb-sync
+
 run: build
 	cd bin && ./${BINARY}
 
 clean: 
-	rm -f ./${BINARY}*
+	rm -f ./bin/${BINARY}
+	rm -f ./bin/logs/*
 
-.PHONY: default build linux run docker docker_push clean
+.PHONY: default build linux windows run docker docker_push clean

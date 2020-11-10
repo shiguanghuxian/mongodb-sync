@@ -11,5 +11,8 @@
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
+
 bin/mongodb-sync
 bin/logs/*
+bin/oplog/*
+bin/last_event_ids.json
