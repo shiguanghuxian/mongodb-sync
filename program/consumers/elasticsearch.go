@@ -3,11 +3,14 @@ package consumers
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"strings"
 
 	"github.com/olivere/elastic"
+	"github.com/shiguanghuxian/mongodb-sync/internal/common"
 	"github.com/shiguanghuxian/mongodb-sync/internal/config"
 	"github.com/shiguanghuxian/mongodb-sync/internal/logger"
 	"github.com/shiguanghuxian/mongodb-sync/internal/models"
@@ -19,19 +22,13 @@ type ElasticsearchConsumer struct {
 	client *elastic.Client
 	cfg    *config.SyncConfig
 	Index  string
-	Type   string
 }
 
 // NewElasticsearchConsumer 创建一个elasticsearch消费对象
 func NewElasticsearchConsumer(cfg *config.SyncConfig) error {
-	destination := strings.Split(cfg.DestinationDb, "/")
-	if len(destination) != 2 || destination[0] == "" || destination[1] == "" {
-		return errors.New("elasticsearch 目标index/type配置错误(destination_db)")
-	}
 	elasticsearchConsumer := &ElasticsearchConsumer{
 		cfg:   cfg,
-		Index: destination[0],
-		Type:  destination[1],
+		Index: cfg.DestinationDb,
 	}
 	err := elasticsearchConsumer.InitClient(cfg)
 	if err != nil {
@@ -52,6 +49,39 @@ func (ec *ElasticsearchConsumer) InitClient(cfg *config.SyncConfig) error {
 		return err
 	}
 	ec.client = esClient
+	// 初始创建化索引
+	err = ec.initCreateIndexs()
+	return err
+}
+
+// 初始创建化索引 - 当索引不存在时
+func (ec *ElasticsearchConsumer) initCreateIndexs() error {
+	// 查看创建索引json是否存在
+	createIndexJsonPath := fmt.Sprintf("./config/elasticsearch/%s.json", ec.Index)
+	isExist, err := common.PathExists(createIndexJsonPath)
+	if err != nil {
+		logger.GlobalLogger.Errorw("查看创建索引json是否存在错误", "err", err, "index", ec.Index, "create_index_json_path", createIndexJsonPath)
+		return err
+	}
+	if isExist {
+		body, err := ioutil.ReadFile(createIndexJsonPath)
+		if err != nil {
+			logger.GlobalLogger.Errorw("读取创建索引json文件错误", "err", err, "index", ec.Index, "create_index_json_path", createIndexJsonPath)
+			return err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), TimeoutCtx)
+		defer cancel()
+		createIndex, err := ec.client.CreateIndex(ec.Index).Body(string(body)).Do(ctx)
+		if err != nil {
+			logger.GlobalLogger.Errorw("创建索引错误", "err", err, "index", ec.Index, "create_index_json_path", createIndexJsonPath)
+			return err
+		}
+		if !createIndex.Acknowledged {
+			logger.GlobalLogger.Debugw("索引未创建成功", "err", err, "index", ec.Index, "create_index_json_path", createIndexJsonPath)
+			log.Println("索引未创建成功")
+		}
+	}
+
 	return nil
 }
 
@@ -78,16 +108,22 @@ func (ec *ElasticsearchConsumer) HandleData(data *models.ChangeEvent) error {
 		}
 	}()
 
+	// elasticsearch type
+	typeName := ec.cfg.Collections[data.Namespace.Coll]
+	if typeName == "" {
+		typeName = data.Namespace.Coll
+	}
+
 	// 根据操作不同处理
 	switch data.Operation {
 	case "insert":
-		err = ec.insert(data)
+		err = ec.insert(data, typeName)
 	case "update":
-		err = ec.update(data)
+		err = ec.update(data, typeName)
 	case "delete":
-		err = ec.delete(data)
+		err = ec.delete(data, typeName)
 	case "replace":
-		err = ec.replace(data)
+		err = ec.replace(data, typeName)
 	default:
 		err = errors.New("未知事件类型")
 		return err
@@ -114,11 +150,11 @@ func (ec *ElasticsearchConsumer) FilterField(collection string, document bson.M)
 }
 
 // 插入es一条数据 - 未来可优化为批量插入 - 需要考虑时间和数据一致性
-func (ec *ElasticsearchConsumer) insert(data *models.ChangeEvent) error {
+func (ec *ElasticsearchConsumer) insert(data *models.ChangeEvent, typeName string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), TimeoutCtx)
 	defer cancel()
 	bulkRequest := ec.client.Bulk()
-	bulkRequest.Add(elastic.NewBulkUpdateRequest().Index(ec.Index).Type(ec.Type).Id(data.DocumentKey.ID.Hex()).Doc(data.Document).DocAsUpsert(true))
+	bulkRequest.Add(elastic.NewBulkUpdateRequest().Index(ec.Index).Type(typeName).Id(data.DocumentKey.ID.Hex()).Doc(data.Document).DocAsUpsert(true))
 	bulkResponse, err := bulkRequest.Do(ctx)
 	if err != nil {
 		logger.GlobalLogger.Errorw("数据插入elasticsearch错误", "err", err, "data", data, "cfg", ec.cfg)
@@ -129,12 +165,12 @@ func (ec *ElasticsearchConsumer) insert(data *models.ChangeEvent) error {
 }
 
 // 更新数据
-func (ec *ElasticsearchConsumer) update(data *models.ChangeEvent) error {
+func (ec *ElasticsearchConsumer) update(data *models.ChangeEvent, typeName string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), TimeoutCtx)
 	defer cancel()
 	// 更新数据
 	bulkRequest := ec.client.Bulk()
-	bulkRequest.Add(elastic.NewBulkUpdateRequest().Index(ec.Index).Type(ec.Type).Id(data.DocumentKey.ID.Hex()).Doc(data.Document).DocAsUpsert(true))
+	bulkRequest.Add(elastic.NewBulkUpdateRequest().Index(ec.Index).Type(typeName).Id(data.DocumentKey.ID.Hex()).Doc(data.Document).DocAsUpsert(true))
 	bulkResponse, err := bulkRequest.Do(ctx)
 	if err != nil {
 		logger.GlobalLogger.Errorw("更新elasticsearch数据错误", "err", err, "data", data, "cfg", ec.cfg)
@@ -145,11 +181,11 @@ func (ec *ElasticsearchConsumer) update(data *models.ChangeEvent) error {
 }
 
 // 删除一条数据
-func (ec *ElasticsearchConsumer) delete(data *models.ChangeEvent) error {
+func (ec *ElasticsearchConsumer) delete(data *models.ChangeEvent, typeName string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), TimeoutCtx)
 	defer cancel()
 	bulkRequest := ec.client.Bulk()
-	bulkRequest.Add(elastic.NewBulkDeleteRequest().Index(ec.Index).Type(ec.Type).Id(data.DocumentKey.ID.Hex()))
+	bulkRequest.Add(elastic.NewBulkDeleteRequest().Index(ec.Index).Type(typeName).Id(data.DocumentKey.ID.Hex()))
 	bulkResponse, err := bulkRequest.Do(ctx)
 	if err != nil {
 		logger.GlobalLogger.Errorw("删除elasticsearch数据错误", "err", err, "data", data, "cfg", ec.cfg)
@@ -160,11 +196,11 @@ func (ec *ElasticsearchConsumer) delete(data *models.ChangeEvent) error {
 }
 
 // 替换全部文档内容时，先删后加
-func (ec *ElasticsearchConsumer) replace(data *models.ChangeEvent) error {
-	err := ec.delete(data)
+func (ec *ElasticsearchConsumer) replace(data *models.ChangeEvent, typeName string) error {
+	err := ec.delete(data, typeName)
 	if err != nil {
 		return err
 	}
-	err = ec.insert(data)
+	err = ec.insert(data, typeName)
 	return err
 }

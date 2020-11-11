@@ -2,14 +2,14 @@ debug = true
 
 # 来源db链接配置
 [mongo]
-source_uri = "mongodb://root:123456@master:27017/goods?maxPoolSize=10"
+source_uri = "mongodb://root:123456@master:27019/goods?maxPoolSize=10"
 source_version = 4.0
 
 # 目标mongo同步配置
 [[sync]]
 enable = true
 type = "mongo" # mongo elasticsearch mysql file 一种输出类型只能配置一个，如果多个，请开启多个程序
-destination_uri = "mongodb://root:123456@master:27017/goods_bak?maxPoolSize=10"
+destination_uri = "mongodb://root:123456@master:27019/goods_bak?maxPoolSize=10"
 source_db = "goods"
 destination_db = "goods_bak" # 当 type=file 时此字段为输出文件名
 
@@ -34,13 +34,13 @@ demo = "demo_bak"
 
 # 目标elasticsearch同步配置
 [[sync]]
-enable = false
+enable = true
 type = "elasticsearch" # mongo elasticsearch mysql file 一种输出类型只能配置一个，如果多个，请开启多个程序
 destination_uri = "http://127.0.0.1:9200" # 多个分号分割
 source_db = "goods"
-destination_db = "goods_index/goods_type" # 当 type=elasticsearch 时此字段 用/分割 index/type
+destination_db = "goods_index" # 当 type=elasticsearch 时此字段为index
 
-# 同步的集合对照 key:来源集合 val:目标集合或表等
+# 同步的集合对照 key:来源集合 val:目标集合或表等 当 type=elasticsearch 时此字段为type
 [sync.collections]
 demo = "demo_bak"
 
