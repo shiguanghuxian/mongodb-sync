@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"time"
 
 	"github.com/shiguanghuxian/mongodb-sync/internal/config"
 	"github.com/shiguanghuxian/mongodb-sync/internal/logger"
@@ -44,6 +45,19 @@ func (mc *MongoConsumer) InitClient(cfg *config.SyncConfig) error {
 	if err != nil {
 		return err
 	}
+	// 定时轮训防止连接断开
+	go func() {
+		for {
+			func() {
+				ctx, cancel := context.WithTimeout(context.Background(), TimeoutCtx)
+				defer cancel()
+				err := mc.client.Ping(ctx, nil)
+				logger.GlobalLogger.Errorw("定时轮训防止连接断开错误", "err", err, "cfg", mc.cfg)
+			}()
+			time.Sleep(time.Minute)
+		}
+	}()
+
 	return nil
 }
 
@@ -51,6 +65,15 @@ func (mc *MongoConsumer) InitClient(cfg *config.SyncConfig) error {
 func (mc *MongoConsumer) Disconnect() error {
 	// 注销
 	unRegisterConsumer(mc.cfg.GetKey())
+	// 关闭连接
+	if mc.client != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), TimeoutCtx)
+		defer cancel()
+		err := mc.client.Disconnect(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

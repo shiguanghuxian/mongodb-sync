@@ -48,6 +48,8 @@ func New(cfg *config.Config) (*Program, error) {
 			err = consumers.NewFileLogConsumer(v)
 		case v.Type == config.SyncTypeEs:
 			err = consumers.NewElasticsearchConsumer(v)
+		case v.Type == config.SyncTypeMysql:
+			err = consumers.NewMysqlConsumer(v, cfg.Debug)
 		default:
 			logger.GlobalLogger.Warnw("不支持的的目标db类型", "type", v.Type)
 			continue

@@ -56,6 +56,16 @@ func (ec *ElasticsearchConsumer) InitClient(cfg *config.SyncConfig) error {
 
 // 初始创建化索引 - 当索引不存在时
 func (ec *ElasticsearchConsumer) initCreateIndexs() error {
+	ctx, cancel := context.WithTimeout(context.Background(), TimeoutCtx)
+	defer cancel()
+	exists, err := ec.client.IndexExists(ec.Index).Do(ctx)
+	if err != nil {
+		logger.GlobalLogger.Errorw("检查索引是否存在错误", "err", err, "index", ec.Index)
+		return err
+	}
+	if exists {
+		return nil
+	}
 	// 查看创建索引json是否存在
 	createIndexJsonPath := fmt.Sprintf("./config/elasticsearch/%s.json", ec.Index)
 	isExist, err := common.PathExists(createIndexJsonPath)
@@ -69,8 +79,6 @@ func (ec *ElasticsearchConsumer) initCreateIndexs() error {
 			logger.GlobalLogger.Errorw("读取创建索引json文件错误", "err", err, "index", ec.Index, "create_index_json_path", createIndexJsonPath)
 			return err
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), TimeoutCtx)
-		defer cancel()
 		createIndex, err := ec.client.CreateIndex(ec.Index).Body(string(body)).Do(ctx)
 		if err != nil {
 			logger.GlobalLogger.Errorw("创建索引错误", "err", err, "index", ec.Index, "create_index_json_path", createIndexJsonPath)
