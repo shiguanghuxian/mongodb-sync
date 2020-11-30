@@ -54,7 +54,7 @@ enable = true
 type = "mysql" # mongo elasticsearch mysql file 一种输出类型只能配置一个，如果多个，请开启多个程序
 destination_uri = "root:123456@tcp(127.0.0.1:3306)/goods?charset=utf8&parseTime=true&loc=Local"
 source_db = "goods"
-destination_db = "goods" # 当 type=file 时此字段为输出文件名
+destination_db = "goods" # 当 type=mysql 时此字段为db名
 
 # 同步的集合对照 key:来源集合 val:目标集合或表等
 [sync.collections]

@@ -2,10 +2,13 @@ package consumers
 
 import (
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"time"
 
 	"github.com/jinzhu/gorm"
+	"github.com/shiguanghuxian/mongodb-sync/internal/common"
 	"github.com/shiguanghuxian/mongodb-sync/internal/config"
 	"github.com/shiguanghuxian/mongodb-sync/internal/logger"
 	"github.com/shiguanghuxian/mongodb-sync/internal/models"
@@ -61,6 +64,33 @@ func (mc *MysqlConsumer) InitClient(cfg *config.SyncConfig) (err error) {
 	return nil
 }
 
+// 初始创建数据表 - 当表不存在时
+func (mc *MysqlConsumer) initCreateTable(tableName string) error {
+	hasTable := mc.db.HasTable(tableName)
+	if hasTable {
+		return nil
+	}
+	createDbSqlPath := fmt.Sprintf("./config/mysql/%s/%s.sql", mc.cfg.DestinationDb, tableName)
+	isExist, err := common.PathExists(createDbSqlPath)
+	if err != nil {
+		logger.GlobalLogger.Errorw("查看创建db sql是否存在错误", "err", err, "db", mc.cfg.DestinationDb, "create_db_sql_path", createDbSqlPath)
+		return err
+	}
+	if isExist {
+		body, err := ioutil.ReadFile(createDbSqlPath)
+		if err != nil {
+			logger.GlobalLogger.Errorw("读取创建db sql文件错误", "err", err, "db", mc.cfg.DestinationDb, "create_db_sql_path", createDbSqlPath)
+			return err
+		}
+		err = mc.db.Exec(string(body)).Error
+		if err != nil {
+			logger.GlobalLogger.Errorw("执行创建表错误", "err", err, "db", mc.cfg.DestinationDb, "create_db_sql_path", createDbSqlPath)
+			return err
+		}
+	}
+	return nil
+}
+
 // 销毁连接
 func (mc *MysqlConsumer) Disconnect() error {
 	// 注销
@@ -76,8 +106,34 @@ func (mc *MysqlConsumer) Disconnect() error {
 }
 
 // 处理一条消息
-func (mc *MysqlConsumer) HandleData(data *models.ChangeEvent) error {
+func (mc *MysqlConsumer) HandleData(data *models.ChangeEvent) (err error) {
 	log.Println("mysql处理收到数据", data.Namespace.Db, data.Namespace.Coll, data.Operation)
+	tableName := mc.cfg.Collections[data.Namespace.Coll]
+	if tableName == "" {
+		tableName = data.Namespace.Coll
+	}
+	err = mc.initCreateTable(tableName)
+	if err != nil {
+		return err
+	}
+	db := mc.db.Table(tableName) // 保证表名固定
+	switch data.Operation {
+	case "insert":
+		err = mc.insert(db, data)
+	case "update":
+		err = mc.update(db, data)
+	case "delete":
+		err = mc.delete(db, data)
+	case "replace":
+		err = mc.replace(db, data)
+	default:
+		return errors.New("未知事件类型")
+	}
+	if err != nil {
+		logger.GlobalLogger.Errorw("处理数据错误", "err", err, "data", data, "cfg", mc.cfg)
+		return err
+	}
+	logger.GlobalLogger.Debugw("mongo数据处理成功", "data", data, "cfg", mc.cfg)
 	return nil
 }
 
@@ -91,5 +147,29 @@ func (mc *MysqlConsumer) FilterField(collection string, document bson.M) error {
 			delete(document, k)
 		}
 	}
+	return nil
+}
+
+// 插入数据
+func (mc *MysqlConsumer) insert(db *gorm.DB, data *models.ChangeEvent) error {
+
+	return nil
+}
+
+// 更新数据
+func (mc *MysqlConsumer) update(db *gorm.DB, data *models.ChangeEvent) error {
+
+	return nil
+}
+
+// 删除
+func (mc *MysqlConsumer) delete(db *gorm.DB, data *models.ChangeEvent) error {
+
+	return nil
+}
+
+// 查找结果，替换
+func (mc *MysqlConsumer) replace(db *gorm.DB, data *models.ChangeEvent) error {
+
 	return nil
 }
