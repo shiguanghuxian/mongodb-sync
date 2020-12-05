@@ -48,7 +48,7 @@ demo = "demo_bak"
 [sync.collection_field]
 demo = ["id", "name", "age"]
 
-# 目标mysql同步配置
+# 目标mysql同步配置 - 数据表需要存在document_key字段，切有唯一索引
 [[sync]]
 enable = true
 type = "mysql" # mongo elasticsearch mysql file 一种输出类型只能配置一个，如果多个，请开启多个程序

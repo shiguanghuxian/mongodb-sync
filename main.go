@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -12,11 +13,24 @@ import (
 
 var (
 	P *program.Program
+	// 版本信息
+	VERSION    = "0.0.0"
+	BUILD_TIME = ""
+	GO_VERSION = ""
+	GIT_HASH   = ""
 )
 
 func main() {
 	// 系统日志显示文件和行号
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
+	// 输出版本
+	if len(os.Args) > 1 {
+		if os.Args[1] == "-v" || os.Args[1] == "version" {
+			fmt.Printf("VERSION: %s\nBUILD_TIME: %s\nGO_VERSION: %s\nGIT_HASH: %s\n", VERSION, BUILD_TIME, GO_VERSION, GIT_HASH)
+			return
+		}
+	}
+
 	// 初始化配置文件
 	cfgChan, err := config.NewConfig("")
 	if err != nil {

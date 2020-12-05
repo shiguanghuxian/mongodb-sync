@@ -116,16 +116,17 @@ func (mc *MysqlConsumer) HandleData(data *models.ChangeEvent) (err error) {
 	if err != nil {
 		return err
 	}
-	db := mc.db.Table(tableName) // 保证表名固定
+	db := mc.db.Table(tableName)                              // 保证表名固定
+	data.Document["document_key"] = data.DocumentKey.ID.Hex() // 给模型数据添加唯一标识
 	switch data.Operation {
 	case "insert":
 		err = mc.insert(db, data)
 	case "update":
 		err = mc.update(db, data)
 	case "delete":
-		err = mc.delete(db, data)
+		err = mc.delete(db, data, tableName)
 	case "replace":
-		err = mc.replace(db, data)
+		err = mc.replace(db, data, tableName)
 	default:
 		return errors.New("未知事件类型")
 	}
@@ -151,25 +152,29 @@ func (mc *MysqlConsumer) FilterField(collection string, document bson.M) error {
 }
 
 // 插入数据
-func (mc *MysqlConsumer) insert(db *gorm.DB, data *models.ChangeEvent) error {
-
-	return nil
+func (mc *MysqlConsumer) insert(db *gorm.DB, data *models.ChangeEvent) (err error) {
+	err = db.Create(data.Document).Error
+	return
 }
 
 // 更新数据
-func (mc *MysqlConsumer) update(db *gorm.DB, data *models.ChangeEvent) error {
-
-	return nil
+func (mc *MysqlConsumer) update(db *gorm.DB, data *models.ChangeEvent) (err error) {
+	err = db.Where("document_key = ?", data.Document["document_key"]).Updates(data.Document).Error
+	return
 }
 
 // 删除
-func (mc *MysqlConsumer) delete(db *gorm.DB, data *models.ChangeEvent) error {
-
-	return nil
+func (mc *MysqlConsumer) delete(db *gorm.DB, data *models.ChangeEvent, typeName string) (err error) {
+	err = db.Exec(fmt.Sprintf("DELETE FROM %s WHERE document_key = ?", typeName), data.Document["document_key"]).Error
+	return
 }
 
 // 查找结果，替换
-func (mc *MysqlConsumer) replace(db *gorm.DB, data *models.ChangeEvent) error {
-
-	return nil
+func (mc *MysqlConsumer) replace(db *gorm.DB, data *models.ChangeEvent, typeName string) (err error) {
+	err = mc.delete(db, data, typeName)
+	if err != nil {
+		return
+	}
+	err = mc.insert(db, data)
+	return
 }
