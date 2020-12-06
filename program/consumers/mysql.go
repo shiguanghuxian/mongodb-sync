@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"strings"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
 	"github.com/shiguanghuxian/mongodb-sync/internal/common"
 	"github.com/shiguanghuxian/mongodb-sync/internal/config"
@@ -120,9 +122,9 @@ func (mc *MysqlConsumer) HandleData(data *models.ChangeEvent) (err error) {
 	data.Document["document_key"] = data.DocumentKey.ID.Hex() // 给模型数据添加唯一标识
 	switch data.Operation {
 	case "insert":
-		err = mc.insert(db, data)
+		err = mc.insert(db, data, tableName)
 	case "update":
-		err = mc.update(db, data)
+		err = mc.update(db, data, tableName)
 	case "delete":
 		err = mc.delete(db, data, tableName)
 	case "replace":
@@ -134,7 +136,7 @@ func (mc *MysqlConsumer) HandleData(data *models.ChangeEvent) (err error) {
 		logger.GlobalLogger.Errorw("处理数据错误", "err", err, "data", data, "cfg", mc.cfg)
 		return err
 	}
-	logger.GlobalLogger.Debugw("mongo数据处理成功", "data", data, "cfg", mc.cfg)
+	logger.GlobalLogger.Debugw("mysql数据处理成功", "data", data, "cfg", mc.cfg)
 	return nil
 }
 
@@ -152,29 +154,54 @@ func (mc *MysqlConsumer) FilterField(collection string, document bson.M) error {
 }
 
 // 插入数据
-func (mc *MysqlConsumer) insert(db *gorm.DB, data *models.ChangeEvent) (err error) {
-	err = db.Create(data.Document).Error
+func (mc *MysqlConsumer) insert(db *gorm.DB, data *models.ChangeEvent, tableName string) (err error) {
+	tpl := "INSERT INTO `%s` (%s) VALUES (%s)"
+	fields := make([]string, 0)
+	values := make([]string, 0)
+	for k, v := range data.Document {
+		fields = append(fields, "`"+k+"`")
+		if v == nil {
+			v = ""
+		}
+		values = append(values, "'"+fmt.Sprint(v)+"'")
+	}
+	sql := fmt.Sprintf(tpl, tableName, strings.Join(fields, ","), strings.Join(values, ","))
+	err = db.Exec(sql).Error
 	return
 }
 
-// 更新数据
-func (mc *MysqlConsumer) update(db *gorm.DB, data *models.ChangeEvent) (err error) {
-	err = db.Where("document_key = ?", data.Document["document_key"]).Updates(data.Document).Error
+// MysqlCount 用于统计mysql数据行数
+type MysqlCount struct {
+	CountTable int64 `gorm:"column:count_table" json:"count_table"`
+}
+
+// 更新数据 - 不存在则插入
+func (mc *MysqlConsumer) update(db *gorm.DB, data *models.ChangeEvent, tableName string) (err error) {
+	mysqlCount := new(MysqlCount)
+	err = db.Where("document_key = ?", data.Document["document_key"]).Select("count(*) as count_table").First(mysqlCount).Error
+	if err != nil {
+		return
+	}
+	if mysqlCount.CountTable > 0 {
+		err = db.Where("document_key = ?", data.Document["document_key"]).Updates(data.Document).Error
+	} else {
+		err = mc.insert(db, data, tableName)
+	}
 	return
 }
 
 // 删除
-func (mc *MysqlConsumer) delete(db *gorm.DB, data *models.ChangeEvent, typeName string) (err error) {
-	err = db.Exec(fmt.Sprintf("DELETE FROM %s WHERE document_key = ?", typeName), data.Document["document_key"]).Error
+func (mc *MysqlConsumer) delete(db *gorm.DB, data *models.ChangeEvent, tableName string) (err error) {
+	err = db.Exec(fmt.Sprintf("DELETE FROM %s WHERE document_key = ?", tableName), data.Document["document_key"]).Error
 	return
 }
 
 // 查找结果，替换
-func (mc *MysqlConsumer) replace(db *gorm.DB, data *models.ChangeEvent, typeName string) (err error) {
-	err = mc.delete(db, data, typeName)
+func (mc *MysqlConsumer) replace(db *gorm.DB, data *models.ChangeEvent, tableName string) (err error) {
+	err = mc.delete(db, data, tableName)
 	if err != nil {
 		return
 	}
-	err = mc.insert(db, data)
+	err = mc.insert(db, data, tableName)
 	return
 }

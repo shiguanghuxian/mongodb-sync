@@ -2,12 +2,12 @@ debug = true
 
 # 来源db链接配置
 [mongo]
-source_uri = "mongodb://root:123456@master:27019/goods?maxPoolSize=10"
+source_uri = "mongodb://root:123456@master:27017/goods?maxPoolSize=10"
 source_version = 4.0
 
 # 目标mongo同步配置
 [[sync]]
-enable = true
+enable = false
 type = "mongo" # mongo elasticsearch mysql file 一种输出类型只能配置一个，如果多个，请开启多个程序
 destination_uri = "mongodb://root:123456@master:27019/goods_bak?maxPoolSize=10"
 source_db = "goods"
@@ -22,7 +22,7 @@ demo = ["id", "name"]
 
 # 目标file同步配置
 [[sync]]
-enable = true
+enable = false
 type = "file" # mongo elasticsearch mysql file 一种输出类型只能配置一个，如果多个，请开启多个程序
 destination_uri = ""
 source_db = "goods"
@@ -34,7 +34,7 @@ demo = "demo_bak"
 
 # 目标elasticsearch同步配置
 [[sync]]
-enable = true
+enable = false
 type = "elasticsearch" # mongo elasticsearch mysql file 一种输出类型只能配置一个，如果多个，请开启多个程序
 destination_uri = "http://127.0.0.1:9200" # 多个分号分割
 source_db = "goods"

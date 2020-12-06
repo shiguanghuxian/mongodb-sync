@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/shiguanghuxian/mongodb-sync/internal/config"
@@ -23,6 +24,7 @@ type Program struct {
 	cfg            *config.Config
 	collectionChan map[string]chan *models.ChangeEvent
 	lastEventIds   map[string][]byte // 保存最后watch的id
+	mutex          sync.RWMutex
 }
 
 // New 创建程序实例
@@ -42,13 +44,13 @@ func New(cfg *config.Config) (*Program, error) {
 		v := v
 		var err error
 		switch {
-		case v.Type == config.SyncTypeMongo:
+		case v.Type == config.SyncTypeMongo && v.Enable:
 			err = consumers.NewMongoConsumer(v)
-		case v.Type == config.SyncTypeFile:
+		case v.Type == config.SyncTypeFile && v.Enable:
 			err = consumers.NewFileLogConsumer(v)
-		case v.Type == config.SyncTypeEs:
+		case v.Type == config.SyncTypeEs && v.Enable:
 			err = consumers.NewElasticsearchConsumer(v)
-		case v.Type == config.SyncTypeMysql:
+		case v.Type == config.SyncTypeMysql && v.Enable:
 			err = consumers.NewMysqlConsumer(v, cfg.Debug)
 		default:
 			logger.GlobalLogger.Warnw("不支持的的目标db类型", "type", v.Type)
@@ -73,6 +75,7 @@ func New(cfg *config.Config) (*Program, error) {
 	return &Program{
 		cfg:          cfg,
 		lastEventIds: lastEventIds,
+		mutex:        sync.RWMutex{},
 	}, nil
 }
 
@@ -100,10 +103,10 @@ func (p *Program) Stop() {
 	logger.DestroyLogger()
 	mongodb.DisconnectSourceClient()
 	// 将最后处理id存储到文件
-	js, _ := json.Marshal(p.lastEventIds)
+	js, _ := p.GetLastEventIdsToJsonBytes()
 	err := ioutil.WriteFile(LastEventIdsFileName, js, os.ModePerm)
 	if err != nil {
-		logger.GlobalLogger.Infow("将lastEventIds写入文件错误", "err", err, "lastEventIds", p.lastEventIds)
+		logger.GlobalLogger.Infow("将lastEventIds写入文件错误", "err", err, "lastEventIds", string(js))
 	}
 	// 休息3秒，保证数据完成
 	time.Sleep(3 * time.Second)
@@ -123,10 +126,10 @@ func (p *Program) Stop() {
 func (p *Program) timerLastEventIds() {
 	t := time.NewTicker(1 * time.Minute)
 	for range t.C {
-		js, _ := json.Marshal(p.lastEventIds)
+		js, _ := p.GetLastEventIdsToJsonBytes()
 		err := ioutil.WriteFile(LastEventIdsFileName, js, os.ModePerm)
 		if err != nil {
-			logger.GlobalLogger.Infow("定时将lastEventIds写入文件错误", "err", err, "lastEventIds", p.lastEventIds)
+			logger.GlobalLogger.Infow("定时将lastEventIds写入文件错误", "err", err, "lastEventIds", string(js))
 		}
 	}
 }

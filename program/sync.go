@@ -2,6 +2,7 @@ package program
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"time"
 
@@ -54,7 +55,7 @@ func (p *Program) producerDbWatch(syncCfg *config.SyncConfig) {
 	configOptions := new(options.ChangeStreamOptions)
 	configOptions.SetFullDocument("updateLookup")
 	// 从上次结束位置开始订阅
-	if rtStr, ok := p.lastEventIds[syncCfg.GetKey()]; ok && len(rtStr) > 0 {
+	if rtStr, ok := p.GetLastEventIds(syncCfg.GetKey()); ok && len(rtStr) > 0 {
 		rt := &bsonx.Doc{}
 		err := bson.Unmarshal(rtStr, rt)
 		if err != nil {
@@ -114,7 +115,7 @@ func (p *Program) producer(cursor *mongo.ChangeStream, syncCfg *config.SyncConfi
 		}
 		// log.Println("记录最后事件id", string(lastEventIdByte))
 		if len(lastEventIdByte) > 0 {
-			p.lastEventIds[syncCfg.GetKey()] = lastEventIdByte
+			p.SetLastEventIds(syncCfg.GetKey(), lastEventIdByte)
 		}
 
 		// js, _ := json.Marshal(changeEvent)
@@ -135,4 +136,25 @@ func (p *Program) consumer(key string, documentChan chan *models.ChangeEvent) {
 	}
 }
 
-// func (p *Program)
+// GetLastEventIds 读取上次结束位置lastEventId
+func (p *Program) GetLastEventIds(key string) ([]byte, bool) {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+	val, ok := p.lastEventIds[key]
+	return val, ok
+}
+
+// SetLastEventIds 设置最后监听事件id
+func (p *Program) SetLastEventIds(key string, val []byte) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.lastEventIds[key] = val
+}
+
+// GetLastEventIdsToJsonBytes 获取json字符
+func (p *Program) GetLastEventIdsToJsonBytes() ([]byte, error) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	js, err := json.Marshal(p.lastEventIds)
+	return js, err
+}
