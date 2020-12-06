@@ -18,6 +18,8 @@ docker: linux
 
 docker_push: docker
 	docker push shiguanghuxian/mongodb-sync
+	docker tag shiguanghuxian/mongodb-sync shiguanghuxian/mongodb-sync:$(VERSION)
+	docker push shiguanghuxian/mongodb-sync:$(VERSION)
 
 run: build
 	cd bin && ./${BINARY}
