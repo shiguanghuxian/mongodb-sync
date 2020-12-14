@@ -25,6 +25,7 @@ type Program struct {
 	collectionChan map[string]chan *models.ChangeEvent
 	lastEventIds   map[string][]byte // 保存最后watch的id
 	mutex          sync.RWMutex
+	stop           bool // 是否结束
 }
 
 // New 创建程序实例
@@ -100,6 +101,7 @@ func (p *Program) Run() {
 
 // Stop 程序结束要做的事
 func (p *Program) Stop() {
+	p.stop = true // 标识结束
 	logger.DestroyLogger()
 	mongodb.DisconnectSourceClient()
 	// 将最后处理id存储到文件
@@ -126,6 +128,10 @@ func (p *Program) Stop() {
 func (p *Program) timerLastEventIds() {
 	t := time.NewTicker(1 * time.Minute)
 	for range t.C {
+		log.Println("定时存储最后事件id到文件")
+		if p.stop {
+			return
+		}
 		js, _ := p.GetLastEventIdsToJsonBytes()
 		err := ioutil.WriteFile(LastEventIdsFileName, js, os.ModePerm)
 		if err != nil {
