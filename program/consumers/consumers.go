@@ -49,15 +49,18 @@ func unRegisterConsumer(key string) {
 func HandleData(key string, data *models.ChangeEvent) {
 	for k, v := range ConsumerMap {
 		if k == key {
+			// 深拷贝
+			changeEvent := new(models.ChangeEvent)
+			*changeEvent = *data
 			// 过滤字段
-			err := v.FilterField(data.Namespace.Coll, data.Document)
+			err := v.FilterField(changeEvent.Namespace.Coll, changeEvent.Document)
 			if err != nil {
-				logger.GlobalLogger.Errorw("一个消费对象过滤字段出现错误", "err", err, "key", k, "namespace", data.Namespace)
+				logger.GlobalLogger.Errorw("一个消费对象过滤字段出现错误", "err", err, "key", k, "namespace", changeEvent.Namespace)
 			}
 			// 交给对应消费者处理
-			err = v.HandleData(data)
+			err = v.HandleData(changeEvent)
 			if err != nil {
-				logger.GlobalLogger.Errorw("一个消费对象处理出现错误", "err", err, "key", k, "namespace", data.Namespace)
+				logger.GlobalLogger.Errorw("一个消费对象处理出现错误", "err", err, "key", k, "namespace", changeEvent.Namespace)
 			}
 		}
 	}

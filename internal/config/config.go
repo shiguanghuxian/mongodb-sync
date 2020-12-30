@@ -60,7 +60,7 @@ func (cfg *SyncConfig) GetKey() string {
 
 func (cfg *SyncConfig) InCollectionField(collection, field string) bool {
 	// 未配置，表示全部字段同步
-	if cfg.CollectionField == nil {
+	if len(cfg.CollectionField) == 0 {
 		return true
 	}
 	for _, v := range cfg.CollectionField[collection] {
