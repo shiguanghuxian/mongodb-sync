@@ -45,20 +45,27 @@ func New(cfg *config.Config) (*Program, error) {
 		v := v
 		var err error
 		switch {
-		case v.Type == config.SyncTypeMongo && v.Enable:
+		case v.Type == config.SyncTypeMongo:
 			err = consumers.NewMongoConsumer(v)
-		case v.Type == config.SyncTypeFile && v.Enable:
+		case v.Type == config.SyncTypeFile:
 			err = consumers.NewFileLogConsumer(v)
-		case v.Type == config.SyncTypeEs && v.Enable:
+		case v.Type == config.SyncTypeEs:
 			err = consumers.NewElasticsearchConsumer(v)
-		case v.Type == config.SyncTypeMysql && v.Enable:
+		case v.Type == config.SyncTypeMysql:
 			err = consumers.NewMysqlConsumer(v, cfg.Debug)
+		case v.Type == config.SyncTypeKafka:
+			err = consumers.NewKafkaConsumer(v)
+		case v.Type == config.SyncTypeRabbitmq:
+			err = consumers.NewRabbitmqConsumer(v)
+		case v.Type == config.SyncTypeNsq:
+			err = consumers.NewNsqConsumer(v)
 		default:
 			logger.GlobalLogger.Warnw("不支持的的目标db类型", "type", v.Type)
 			continue
 		}
 		if err != nil {
-			logger.GlobalLogger.Errorw("初始化目标db消费者错误", "err", err, "cfg", v)
+			log.Println("初始化目标消费者错误", v, err)
+			logger.GlobalLogger.Errorw("初始化目标消费者错误", "err", err, "cfg", v)
 		}
 	}
 	// 读取上次结束位置lastEventIds

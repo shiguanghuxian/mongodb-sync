@@ -12,8 +12,10 @@ require (
 	github.com/mailru/easyjson v0.7.6 // indirect
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/naoina/toml v0.1.1
+	github.com/nsqio/go-nsq v1.0.8
 	github.com/olivere/elastic v6.2.35+incompatible
 	github.com/segmentio/kafka-go v0.4.8
+	github.com/streadway/amqp v1.0.0
 	go.mongodb.org/mongo-driver v1.4.2
 	go.uber.org/zap v1.16.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0

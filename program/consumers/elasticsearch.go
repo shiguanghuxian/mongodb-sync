@@ -149,7 +149,7 @@ func (ec *ElasticsearchConsumer) FilterField(collection string, document bson.M)
 	if document == nil {
 		return nil
 	}
-	for k, _ := range document {
+	for k := range document {
 		if !ec.cfg.InCollectionField(collection, k) {
 			delete(document, k)
 		}

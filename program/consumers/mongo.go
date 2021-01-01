@@ -111,7 +111,7 @@ func (mc *MongoConsumer) FilterField(collection string, document bson.M) error {
 	if document == nil {
 		return nil
 	}
-	for k, _ := range document {
+	for k := range document {
 		if !mc.cfg.InCollectionField(collection, k) {
 			delete(document, k)
 		}

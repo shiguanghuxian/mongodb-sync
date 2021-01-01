@@ -28,10 +28,13 @@ func (c *MongoConfig) String() string {
 }
 
 const (
-	SyncTypeMongo = "mongo"
-	SyncTypeEs    = "elasticsearch"
-	SyncTypeMysql = "mysql"
-	SyncTypeFile  = "file"
+	SyncTypeMongo    = "mongo"
+	SyncTypeEs       = "elasticsearch"
+	SyncTypeMysql    = "mysql"
+	SyncTypeFile     = "file"
+	SyncTypeKafka    = "kafka"
+	SyncTypeRabbitmq = "rabbitmq"
+	SyncTypeNsq      = "nsq"
 )
 
 type SyncConfig struct {
